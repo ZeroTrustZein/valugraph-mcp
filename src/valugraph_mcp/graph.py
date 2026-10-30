@@ -201,7 +201,14 @@ class TemporalCREGraph:
     def get_neighborhood_subgraph(self, apn: str, depth: int = 2) -> dict[str, Any]:
         """Extract ego-graph centered at parcel up to depth hops."""
         if not self.g.has_node(apn):
-            return {"nodes": [], "edges": []}
+            return {
+                "root_apn": apn,
+                "depth": depth,
+                "node_count": 0,
+                "edge_count": 0,
+                "nodes": [],
+                "edges": [],
+            }
 
         sub_nodes = nx.single_source_shortest_path_length(
             self.g.to_undirected(as_view=True), apn, cutoff=depth

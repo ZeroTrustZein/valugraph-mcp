@@ -177,8 +177,8 @@ def create_mcp_server(name: str = "valugraph-mcp") -> MCPServer:
             "tenants": tenants,
             "encumbrances": encumbrances,
             "graph_summary": {
-                "nodes_in_neighborhood": subgraph["node_count"],
-                "edges_in_neighborhood": subgraph["edge_count"],
+                "nodes_in_neighborhood": subgraph.get("node_count", 0),
+                "edges_in_neighborhood": subgraph.get("edge_count", 0),
                 "total_graph_nodes": graph.node_count,
                 "total_graph_edges": graph.edge_count,
             },
