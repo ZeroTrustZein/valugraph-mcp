@@ -10,9 +10,10 @@
 
 - **Multi-Scenario DCF Engine**: Automated 10-year discounted cash flow modeling (Base, Bull, Bear, and Severe Stress) with numerical IRR solving (Newton-Raphson with bisection fallback), debt service sizing, and exit valuations.
 - **CMBS Tranche & Risk Engine**: Commercial Mortgage-Backed Securities pool analytics, weighted-average LTV / DSCR calculation, debt yields, and waterfall tranche credit loss modeling across tranches (AAA through Equity).
+- **Autonomous Diagnosis Engine**: Rule-based quantitative diagnostic engine triaging property debt service coverage, leverage, liquidity, tenant concentration, and break-even occupancy into actionable underwriting decisions (`APPROVE`, `CONDITIONALLY_APPROVE`, `REJECT`).
 - **Hybrid CRE Knowledge Graph**: Temporal graph structure tracking property parcels, ownership chains, tenant lease expirations, credit concentrations, and mortgage liens.
 - **Model Context Protocol (MCP)**: Native FastMCP/MCPServer integration allowing LLM agents to orchestrate underwriting, stress-test CMBS pools, query graph neighbors, and inspect cash flows.
-- **Command Line Interface**: Rich terminal UI for instant property valuation, pool stress-testing, and running the MCP daemon.
+- **Command Line Interface**: Rich terminal UI for instant property valuation, pool stress-testing, automated diagnostic triage, and running the MCP daemon.
 
 ## Architecture
 
@@ -30,7 +31,14 @@
 ┌──────────────────────┐ ┌──────────────────────┐ ┌──────────────────────┐
 │ Temporal CRE Graph   │ │ Multi-Scenario DCF   │ │ CMBS Tranche Risk    │
 │ Parcel/Owner/Tenant  │ │ IRR / NPV / Debt Cov │ │ Waterfall Loss Model │
-└──────────────────────┘ └──────────────────────┘ └──────────────────────┘
+└──────────────────────┘ └──────────┬───────────┘ └──────────┬───────────┘
+                                    │                        │
+                                    └──────────┬─────────────┘
+                                               ▼
+                                    ┌──────────────────────┐
+                                    │   Diagnosis Engine   │
+                                    │ Health / Risk Triage │
+                                    └──────────────────────┘
 ```
 
 ## Quick Start
@@ -52,8 +60,14 @@ valugraph info
 # Underwrite commercial property with DCF scenarios
 valugraph underwrite --apn 042-108-01 --price 12500000 --revenue 1450000 --expenses 420000
 
+# Run automated diagnostic health check on asset
+valugraph diagnose --apn 042-108-01 --price 12500000 --noi 1030000 --loan 8125000 --occupancy 0.94
+
 # Stress-test a CMBS loan pool
-valugraph stress-test --balance 50000000 --default-rate 0.15 --loss-severity 0.40
+valugraph stress-test --balance 50000000 --shock-bps 150 --loss-severity 0.40
+
+# Run pool diagnostic triage across tranches and delinquency
+valugraph diagnose-pool --balance 50000000 --shock-bps 200 --loss-severity 0.45
 
 # Start MCP server daemon
 valugraph serve
