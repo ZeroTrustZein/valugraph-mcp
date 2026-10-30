@@ -16,6 +16,7 @@ from valugraph_mcp.types import (
     OperatingStatement,
     PropertyParcel,
     PropertyType,
+    StressTestConfig,
     Tenant,
 )
 
@@ -300,6 +301,39 @@ def create_mcp_server(name: str = "valugraph-mcp") -> MCPServer:
             "findings": [f.model_dump() for f in diag.findings],
             "strengths": diag.strengths,
             "red_flags": diag.red_flags,
+        }
+
+    @server.tool()
+    def diagnose_cmbs_pool(
+        deal_id: str = "VALU-2026-C1",
+        total_balance: float = 100000000.0,
+        rate_shock_bps: float = 150.0,
+        loss_severity: float = 0.40,
+    ) -> dict[str, Any]:
+        """Run comprehensive risk diagnosis, delinquency checks, and health scoring on a CMBS collateral pool."""
+        deal = cmbs_engine.build_synthetic_deal(deal_id=deal_id, total_balance=total_balance)
+        stress_cfg = StressTestConfig(
+            rate_shock_bps=rate_shock_bps,
+            loss_severity=loss_severity,
+        )
+        pool_diag = diagnosis_engine.diagnose_cmbs_pool(deal=deal, stress_config=stress_cfg)
+
+        return {
+            "deal_id": pool_diag.deal_id,
+            "pool_health_score": pool_diag.pool_health_score,
+            "overall_risk": pool_diag.overall_risk.value,
+            "summary": {
+                "total_balance": pool_diag.summary.total_balance,
+                "weighted_avg_dscr": pool_diag.summary.weighted_avg_dscr,
+                "weighted_avg_ltv": pool_diag.summary.weighted_avg_ltv,
+                "weighted_avg_coupon": pool_diag.summary.weighted_avg_coupon,
+                "loan_count": pool_diag.summary.loan_count,
+            },
+            "delinquency_rate": pool_diag.delinquency_rate,
+            "stressed_loss_pct": pool_diag.stressed_loss_pct,
+            "impaired_tranches": pool_diag.impaired_tranches,
+            "findings_count": len(pool_diag.findings),
+            "findings": [f.model_dump() for f in pool_diag.findings],
         }
 
     return server

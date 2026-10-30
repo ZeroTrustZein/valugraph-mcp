@@ -11,7 +11,14 @@ from valugraph_mcp.cmbs import CMBSRiskEngine
 from valugraph_mcp.dcf import DCFEngine
 from valugraph_mcp.diagnosis import DiagnosisEngine
 from valugraph_mcp.server import create_mcp_server
-from valugraph_mcp.types import CMBSLoan, DCFInputs, PropertyParcel, PropertyType
+from valugraph_mcp.types import (
+    CMBSLoan,
+    DCFInputs,
+    OperatingStatement,
+    PropertyParcel,
+    PropertyType,
+    StressTestConfig,
+)
 
 console = Console()
 
@@ -181,6 +188,8 @@ def stress_test_cmd(balance: float, shock_bps: float, loss_severity: float) -> N
 @click.option("--loan", default=None, type=float, help="Existing loan amount in USD")
 @click.option("--rate", default=0.065, type=float, help="Debt interest rate (default: 0.065)")
 @click.option("--occupancy", default=0.95, type=float, help="Occupancy rate (default: 0.95)")
+@click.option("--gpr", default=None, type=float, help="Gross Potential Rent in USD")
+@click.option("--opex", default=None, type=float, help="Operating Expenses in USD")
 def diagnose_cmd(
     apn: str,
     price: float,
@@ -188,6 +197,8 @@ def diagnose_cmd(
     loan: float | None,
     rate: float,
     occupancy: float,
+    gpr: float | None,
+    opex: float | None,
 ) -> None:
     """Run comprehensive risk diagnosis and health scoring on a CRE property."""
     parcel = PropertyParcel(
@@ -220,8 +231,20 @@ def diagnose_cmd(
             maturity_date="2036-12-31",
         )
 
+    statement = None
+    if gpr is not None and opex is not None:
+        statement = OperatingStatement(
+            property_apn=apn,
+            period_year=2026,
+            gross_potential_rent=gpr,
+            vacancy_loss=round(gpr * (1.0 - occupancy), 2),
+            effective_gross_income=round(gpr * occupancy, 2),
+            total_operating_expenses=opex,
+            net_operating_income=noi,
+        )
+
     engine = DiagnosisEngine()
-    diag = engine.diagnose_property(parcel=parcel, loan=loan_obj)
+    diag = engine.diagnose_property(parcel=parcel, loan=loan_obj, statement=statement)
 
     table = Table(title=f"ValuGraph Property Diagnosis: {apn}")
     table.add_column("Metric", style="cyan")
@@ -252,6 +275,63 @@ def diagnose_cmd(
         console.print("[bold green]Strengths:[/bold green]")
         for s in diag.strengths:
             console.print(f"  • {s}")
+
+
+@cli.command("diagnose-pool")
+@click.option("--balance", default=100000000.0, type=float, help="Total CMBS pool issuance")
+@click.option("--shock-bps", default=150.0, type=float, help="Interest rate shock in basis points")
+@click.option("--loss-severity", default=0.40, type=float, help="Severity percentage on default")
+def diagnose_pool_cmd(balance: float, shock_bps: float, loss_severity: float) -> None:
+    """Run comprehensive risk diagnosis and health scoring on a CMBS pool."""
+    cmbs_engine = CMBSRiskEngine()
+    deal = cmbs_engine.build_synthetic_deal(total_balance=balance)
+    stress_cfg = StressTestConfig(rate_shock_bps=shock_bps, loss_severity=loss_severity)
+    engine = DiagnosisEngine()
+    pool_diag = engine.diagnose_cmbs_pool(deal=deal, stress_config=stress_cfg)
+
+    table = Table(title=f"ValuGraph CMBS Pool Diagnosis: {pool_diag.deal_id}")
+    table.add_column("Metric", style="cyan")
+    table.add_column("Value", style="yellow")
+    table.add_column("Status / Benchmark", style="white")
+
+    table.add_row(
+        "Health Score",
+        f"{pool_diag.pool_health_score}/100",
+        f"Risk: {pool_diag.overall_risk.value.upper()}",
+    )
+    table.add_row(
+        "Weighted DSCR",
+        f"{pool_diag.summary.weighted_avg_dscr:.2f}x",
+        "Target >= 1.25x",
+    )
+    table.add_row(
+        "Weighted LTV",
+        f"{pool_diag.summary.weighted_avg_ltv * 100:.1f}%",
+        "Target <= 70.0%",
+    )
+    table.add_row(
+        "Delinquency Rate",
+        f"{pool_diag.delinquency_rate * 100:.1f}%",
+        "Target <= 2.0%",
+    )
+    table.add_row(
+        "Stressed Loss",
+        f"{pool_diag.stressed_loss_pct * 100:.2f}%",
+        "Expected pool loss",
+    )
+    table.add_row(
+        "Impaired Tranches",
+        ", ".join(pool_diag.impaired_tranches) if pool_diag.impaired_tranches else "None",
+        "Tranches suffering principal loss",
+    )
+
+    console.print(table)
+
+    if pool_diag.findings:
+        console.print("[bold red]Diagnostic Findings:[/bold red]")
+        for f in pool_diag.findings:
+            console.print(f"  • [{f.severity.value.upper()}] {f.metric_name}: {f.summary}")
+            console.print(f"    Action: {f.recommendation}")
 
 
 @cli.command("serve")

@@ -36,6 +36,8 @@ def test_cli_help(cli_runner: CliRunner) -> None:
     assert "info" in result.output
     assert "underwrite" in result.output
     assert "stress-test" in result.output
+    assert "diagnose" in result.output
+    assert "diagnose-pool" in result.output
     assert "serve" in result.output
 
 
@@ -231,3 +233,4 @@ async def test_mcp_server_tools_registered() -> None:
     assert "query_property_graph" in tool_names
     assert "estimate_debt_capacity" in tool_names
     assert "diagnose_property_risk" in tool_names
+    assert "diagnose_cmbs_pool" in tool_names

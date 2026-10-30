@@ -342,6 +342,56 @@ class TestDiagnosisIntegration:
         assert "Decision" in result.output
         assert "Debt Yield" in result.output
 
+    def test_cli_diagnose_command_with_statement(self) -> None:
+        """Verify CLI diagnose command accepts gross potential rent and operating expenses."""
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            [
+                "diagnose",
+                "--apn",
+                "APN-CLI-STMT",
+                "--price",
+                "15000000",
+                "--noi",
+                "1200000",
+                "--loan",
+                "9000000",
+                "--rate",
+                "0.065",
+                "--occupancy",
+                "0.92",
+                "--gpr",
+                "1800000",
+                "--opex",
+                "450000",
+            ],
+        )
+        assert result.exit_code == 0
+        assert "ValuGraph Property Diagnosis: APN-CLI-STMT" in result.output
+        assert "Health Score" in result.output
+
+    def test_cli_diagnose_pool_command(self) -> None:
+        """Verify CLI diagnose-pool command runs stress diagnosis on synthetic CMBS pool."""
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            [
+                "diagnose-pool",
+                "--balance",
+                "50000000",
+                "--shock-bps",
+                "200",
+                "--loss-severity",
+                "0.45",
+            ],
+        )
+        assert result.exit_code == 0
+        assert "ValuGraph CMBS Pool Diagnosis:" in result.output
+        assert "Health Score" in result.output
+        assert "Weighted DSCR" in result.output
+        assert "Impaired Tranches" in result.output
+
     @pytest.mark.asyncio
     async def test_mcp_server_diagnose_tool(self) -> None:
         """Verify MCP server tool 'diagnose_property_risk' evaluates property correctly."""
@@ -356,6 +406,26 @@ class TestDiagnosisIntegration:
                 "purchase_price": 30000000.0,
                 "current_noi": 2400000.0,
                 "loan_amount": 18000000.0,
+            },
+        )
+        assert res is not None
+        assert not res.is_error
+        assert len(res.content) > 0
+
+    @pytest.mark.asyncio
+    async def test_mcp_server_diagnose_cmbs_pool_tool(self) -> None:
+        """Verify MCP server tool 'diagnose_cmbs_pool' diagnoses CMBS collateral pool."""
+        server = create_mcp_server("test-server")
+        tools = await server.list_tools()
+        assert "diagnose_cmbs_pool" in [t.name for t in tools]
+
+        res = await server.call_tool(
+            "diagnose_cmbs_pool",
+            {
+                "deal_id": "TEST-2026-POOL",
+                "total_balance": 80000000.0,
+                "rate_shock_bps": 175.0,
+                "loss_severity": 0.40,
             },
         )
         assert res is not None
