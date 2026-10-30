@@ -9,8 +9,9 @@ from rich.table import Table
 import valugraph_mcp
 from valugraph_mcp.cmbs import CMBSRiskEngine
 from valugraph_mcp.dcf import DCFEngine
+from valugraph_mcp.diagnosis import DiagnosisEngine
 from valugraph_mcp.server import create_mcp_server
-from valugraph_mcp.types import DCFInputs, PropertyParcel, PropertyType
+from valugraph_mcp.types import CMBSLoan, DCFInputs, PropertyParcel, PropertyType
 
 console = Console()
 
@@ -43,6 +44,11 @@ def info_cmd() -> None:
         "CMBS Tranche Waterfall",
         "ONLINE",
         "Securitization subordination risk and default loss allocation",
+    )
+    table.add_row(
+        "Diagnosis Engine",
+        "ONLINE",
+        "Autonomous diagnostic scoring, red flag triage, and underwriting decisioning",
     )
     table.add_row(
         "Model Context Protocol",
@@ -166,6 +172,86 @@ def stress_test_cmd(balance: float, shock_bps: float, loss_severity: float) -> N
     console.print(
         f"[bold]Total Pool Expected Loss:[/bold] ${stress['total_expected_loss']:,.0f} ({stress['pool_loss_pct'] * 100:.2f}%)"
     )
+
+
+@cli.command("diagnose")
+@click.option("--apn", required=True, help="Property Assessor Parcel Number")
+@click.option("--price", required=True, type=float, help="Property purchase price in USD")
+@click.option("--noi", required=True, type=float, help="Current Net Operating Income in USD")
+@click.option("--loan", default=None, type=float, help="Existing loan amount in USD")
+@click.option("--rate", default=0.065, type=float, help="Debt interest rate (default: 0.065)")
+@click.option("--occupancy", default=0.95, type=float, help="Occupancy rate (default: 0.95)")
+def diagnose_cmd(
+    apn: str,
+    price: float,
+    noi: float,
+    loan: float | None,
+    rate: float,
+    occupancy: float,
+) -> None:
+    """Run comprehensive risk diagnosis and health scoring on a CRE property."""
+    parcel = PropertyParcel(
+        apn=apn,
+        address=f"Asset-{apn}",
+        property_type=PropertyType.COMMERCIAL
+        if hasattr(PropertyType, "COMMERCIAL")
+        else PropertyType.OFFICE,
+        gross_sqft=100000.0,
+        rentable_sqft=95000.0,
+        year_built=2020,
+        purchase_price=price,
+        current_noi=noi,
+        occupancy_rate=occupancy,
+    )
+
+    loan_obj = None
+    if loan is not None and loan > 0:
+        ltv = round(loan / price, 4) if price > 0 else 0.0
+        annual_ds = DCFEngine.calculate_annual_debt_service(loan, rate, 30)
+        dscr = round(noi / annual_ds, 4) if annual_ds > 0 else 2.0
+        loan_obj = CMBSLoan(
+            loan_id=f"LN-{apn}",
+            property_apn=apn,
+            original_balance=loan,
+            current_balance=loan,
+            interest_rate=rate,
+            dscr=dscr,
+            ltv=ltv,
+            maturity_date="2036-12-31",
+        )
+
+    engine = DiagnosisEngine()
+    diag = engine.diagnose_property(parcel=parcel, loan=loan_obj)
+
+    table = Table(title=f"ValuGraph Property Diagnosis: {apn}")
+    table.add_column("Metric", style="cyan")
+    table.add_column("Value", style="yellow")
+    table.add_column("Status / Benchmark", style="white")
+
+    table.add_row(
+        "Health Score", f"{diag.health_score}/100", f"Risk: {diag.overall_risk.value.upper()}"
+    )
+    table.add_row("Decision", diag.underwriting_decision, "Underwriting Verdict")
+    table.add_row("Cap Rate", f"{diag.metrics.cap_rate * 100:.2f}%", "NOI / Value")
+    table.add_row("Debt Yield", f"{diag.metrics.debt_yield * 100:.2f}%", "Target >= 8.0%")
+    table.add_row("Senior LTV", f"{diag.metrics.loan_to_cost * 100:.1f}%", "Target <= 75.0%")
+    table.add_row(
+        "Break-even Occupancy",
+        f"{diag.metrics.break_even_occupancy * 100:.1f}%",
+        f"Current: {occupancy * 100:.1f}%",
+    )
+
+    console.print(table)
+
+    if diag.red_flags:
+        console.print("[bold red]Red Flags:[/bold red]")
+        for rf in diag.red_flags:
+            console.print(f"  • {rf}")
+
+    if diag.strengths:
+        console.print("[bold green]Strengths:[/bold green]")
+        for s in diag.strengths:
+            console.print(f"  • {s}")
 
 
 @cli.command("serve")

@@ -88,6 +88,18 @@ class RelationshipType(str, Enum):
     ADJACENT_TO = "ADJACENT_TO"
 
 
+class DiagnosticCategory(str, Enum):
+    """Classification of underwriting and risk diagnosis findings."""
+
+    LEVERAGE = "leverage"
+    COVERAGE = "coverage"
+    LIQUIDITY = "liquidity"
+    TENANT_CONCENTRATION = "tenant_concentration"
+    LEASE_ROLLOVER = "lease_rollover"
+    VALUATION = "valuation"
+    OPERATIONAL = "operational"
+
+
 # --- Domain Models ---
 
 
@@ -224,9 +236,7 @@ class CMBSLoan(BaseModel):
     is_interest_only: bool = Field(
         default=False, description="Whether loan is currently interest-only"
     )
-    status: LoanStatus = Field(
-        default=LoanStatus.CURRENT, description="Loan performance status"
-    )
+    status: LoanStatus = Field(default=LoanStatus.CURRENT, description="Loan performance status")
 
 
 class CMBSTranche(BaseModel):
@@ -290,7 +300,9 @@ class CMBSSubordinationAnalysis(BaseModel):
     tranche_allocations: list[TrancheLossAllocation] = Field(
         default_factory=list, description="Tranche loss results"
     )
-    equity_wiped_out: bool = Field(default=False, description="Whether first-loss equity is exhausted")
+    equity_wiped_out: bool = Field(
+        default=False, description="Whether first-loss equity is exhausted"
+    )
     investment_grade_impaired: bool = Field(
         default=False, description="Whether BBB or higher tranches incurred losses"
     )
@@ -373,6 +385,60 @@ class UnderwritingReport(BaseModel):
     average_dscr: float
     min_dscr: float
     conclusion: str
+
+
+class DiagnosticFinding(BaseModel):
+    """Specific diagnostic anomaly, vulnerability, or underwriting red flag."""
+
+    category: DiagnosticCategory = Field(..., description="Risk category domain")
+    severity: RiskLevel = Field(..., description="Severity classification")
+    metric_name: str = Field(..., description="Underlying financial metric analyzed")
+    metric_value: float = Field(..., description="Calculated metric value")
+    threshold: float = Field(..., description="Underwriting threshold breached")
+    summary: str = Field(..., description="Terse finding diagnosis")
+    recommendation: str = Field(..., description="Mitigating action or loan covenant")
+
+
+class PropertyDiagnosis(BaseModel):
+    """Complete diagnostic health assessment of commercial real estate parcel."""
+
+    property_apn: str = Field(..., description="Assessor Parcel Number")
+    health_score: float = Field(..., ge=0.0, le=100.0, description="Overall health score (0-100)")
+    overall_risk: RiskLevel = Field(..., description="Composite risk level")
+    metrics: ValuationMetrics = Field(..., description="Key diagnostic ratios and metrics")
+    findings: list[DiagnosticFinding] = Field(
+        default_factory=list, description="All identified risk findings"
+    )
+    strengths: list[str] = Field(
+        default_factory=list, description="Identified credit and operational strengths"
+    )
+    red_flags: list[str] = Field(default_factory=list, description="Critical warning items")
+    underwriting_decision: str = Field(
+        ..., description="Decision: APPROVE, CONDITIONALLY_APPROVE, REJECT"
+    )
+
+
+class PoolDiagnosis(BaseModel):
+    """Diagnostic health assessment of CMBS collateral loan pool."""
+
+    deal_id: str = Field(..., description="Securitization deal identifier")
+    pool_health_score: float = Field(
+        ..., ge=0.0, le=100.0, description="Overall pool health score (0-100)"
+    )
+    overall_risk: RiskLevel = Field(..., description="Composite risk level")
+    summary: CMBSPoolSummary = Field(..., description="Aggregate collateral pool metrics")
+    findings: list[DiagnosticFinding] = Field(
+        default_factory=list, description="Identified pool risk findings"
+    )
+    stressed_loss_pct: float = Field(
+        default=0.0, ge=0.0, description="Projected cumulative loss percentage"
+    )
+    impaired_tranches: list[str] = Field(
+        default_factory=list, description="Tranches suffering principal loss"
+    )
+    delinquency_rate: float = Field(
+        default=0.0, ge=0.0, le=1.0, description="Fraction of non-current loan balance"
+    )
 
 
 class GraphNode(BaseModel):
@@ -485,6 +551,8 @@ __all__ = [
     "CMBSTranche",
     "CashFlowYear",
     "DCFInputs",
+    "DiagnosticCategory",
+    "DiagnosticFinding",
     "GraphEdge",
     "GraphNode",
     "GraphQuery",
@@ -493,6 +561,8 @@ __all__ = [
     "LeaseType",
     "LoanStatus",
     "OperatingStatement",
+    "PoolDiagnosis",
+    "PropertyDiagnosis",
     "PropertyParcel",
     "PropertyType",
     "RelationshipType",

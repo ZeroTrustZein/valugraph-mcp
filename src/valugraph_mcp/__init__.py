@@ -6,6 +6,7 @@ __version__ = "0.1.0"
 
 from valugraph_mcp.cmbs import CMBSRiskEngine
 from valugraph_mcp.dcf import DCFEngine, calculate_irr
+from valugraph_mcp.diagnosis import DiagnosisEngine
 from valugraph_mcp.graph import TemporalCREGraph
 from valugraph_mcp.server import create_mcp_server
 from valugraph_mcp.types import (
@@ -14,10 +15,14 @@ from valugraph_mcp.types import (
     CMBSSecuritization,
     CMBSTranche,
     DCFInputs,
+    DiagnosticCategory,
+    DiagnosticFinding,
     Lease,
     LeaseType,
     LoanStatus,
     OperatingStatement,
+    PoolDiagnosis,
+    PropertyDiagnosis,
     PropertyParcel,
     PropertyType,
     RentRoll,
@@ -37,10 +42,15 @@ __all__ = [
     "CMBSTranche",
     "DCFEngine",
     "DCFInputs",
+    "DiagnosisEngine",
+    "DiagnosticCategory",
+    "DiagnosticFinding",
     "Lease",
     "LeaseType",
     "LoanStatus",
     "OperatingStatement",
+    "PoolDiagnosis",
+    "PropertyDiagnosis",
     "PropertyParcel",
     "PropertyType",
     "RentRoll",

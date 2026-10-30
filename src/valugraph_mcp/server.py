@@ -8,9 +8,12 @@ from mcp.server import MCPServer
 
 from valugraph_mcp.cmbs import CMBSRiskEngine
 from valugraph_mcp.dcf import DCFEngine
+from valugraph_mcp.diagnosis import DiagnosisEngine
 from valugraph_mcp.graph import TemporalCREGraph
 from valugraph_mcp.types import (
+    CMBSLoan,
     DCFInputs,
+    OperatingStatement,
     PropertyParcel,
     PropertyType,
     Tenant,
@@ -23,6 +26,7 @@ def create_mcp_server(name: str = "valugraph-mcp") -> MCPServer:
 
     dcf_engine = DCFEngine()
     cmbs_engine = CMBSRiskEngine()
+    diagnosis_engine = DiagnosisEngine()
     graph = TemporalCREGraph()
 
     # Pre-seed sample benchmark property into graph for instant testing
@@ -219,6 +223,83 @@ def create_mcp_server(name: str = "valugraph-mcp") -> MCPServer:
             "debt_yield": round(
                 net_operating_income / recommended_debt if recommended_debt > 0 else 0, 4
             ),
+        }
+
+    @server.tool()
+    def diagnose_property_risk(
+        apn: str,
+        purchase_price: float,
+        current_noi: float,
+        loan_amount: float | None = None,
+        interest_rate: float = 0.065,
+        occupancy_rate: float = 0.95,
+        gross_potential_rent: float | None = None,
+        operating_expenses: float | None = None,
+    ) -> dict[str, Any]:
+        """Diagnose property underwriting health, financial ratios, red flags, and loan approval."""
+        parcel = PropertyParcel(
+            apn=apn,
+            address="Diagnostic Subject Asset",
+            property_type=PropertyType.COMMERCIAL
+            if hasattr(PropertyType, "COMMERCIAL")
+            else PropertyType.OFFICE,
+            gross_sqft=100000.0,
+            rentable_sqft=95000.0,
+            year_built=2020,
+            purchase_price=purchase_price,
+            current_noi=current_noi,
+            occupancy_rate=occupancy_rate,
+        )
+
+        loan = None
+        if loan_amount is not None and loan_amount > 0:
+            ltv = round(loan_amount / purchase_price, 4) if purchase_price > 0 else 0.0
+            annual_ds = DCFEngine.calculate_annual_debt_service(loan_amount, interest_rate, 30)
+            dscr = round(current_noi / annual_ds, 4) if annual_ds > 0 else 2.0
+            loan = CMBSLoan(
+                loan_id=f"LN-{apn}",
+                property_apn=apn,
+                original_balance=loan_amount,
+                current_balance=loan_amount,
+                interest_rate=interest_rate,
+                dscr=dscr,
+                ltv=ltv,
+                maturity_date="2036-12-31",
+            )
+
+        statement = None
+        if gross_potential_rent is not None and operating_expenses is not None:
+            statement = OperatingStatement(
+                property_apn=apn,
+                period_year=2026,
+                gross_potential_rent=gross_potential_rent,
+                vacancy_loss=gross_potential_rent * (1.0 - occupancy_rate),
+                effective_gross_income=gross_potential_rent * occupancy_rate,
+                total_operating_expenses=operating_expenses,
+                net_operating_income=current_noi,
+            )
+
+        diag = diagnosis_engine.diagnose_property(
+            parcel=parcel,
+            loan=loan,
+            statement=statement,
+        )
+
+        return {
+            "apn": diag.property_apn,
+            "health_score": diag.health_score,
+            "overall_risk": diag.overall_risk.value,
+            "underwriting_decision": diag.underwriting_decision,
+            "metrics": {
+                "cap_rate": diag.metrics.cap_rate,
+                "debt_yield": diag.metrics.debt_yield,
+                "loan_to_cost": diag.metrics.loan_to_cost,
+                "break_even_occupancy": diag.metrics.break_even_occupancy,
+            },
+            "findings_count": len(diag.findings),
+            "findings": [f.model_dump() for f in diag.findings],
+            "strengths": diag.strengths,
+            "red_flags": diag.red_flags,
         }
 
     return server

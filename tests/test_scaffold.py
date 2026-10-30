@@ -230,3 +230,4 @@ async def test_mcp_server_tools_registered() -> None:
     assert "stress_test_cmbs_pool" in tool_names
     assert "query_property_graph" in tool_names
     assert "estimate_debt_capacity" in tool_names
+    assert "diagnose_property_risk" in tool_names
